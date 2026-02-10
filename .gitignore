@@ -207,6 +207,10 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# ChromaDB persistent storage
+.chroma_data/
+.test_chroma_data/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

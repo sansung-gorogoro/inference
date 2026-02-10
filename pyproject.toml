@@ -1,9 +1,14 @@
 [project]
 name = "inference"
 version = "0.1.0"
-description = "Add your description here"
+description = "STT -> RAG Index -> MCQ Quiz Generation Pipeline"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.128.6",
+    "pydantic>=2.0",
+    "httpx>=0.27.0",
+    "uvicorn>=0.32.1",
+    "python-dotenv>=1.0.0",
+    "chromadb>=0.4.0",
 ]
