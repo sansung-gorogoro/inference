@@ -100,6 +100,49 @@ class BGEEmbedder:
             logger.error(f"Embedding failed: {e}")
             raise RuntimeError(f"Failed to embed chunks: {e}") from e
 
+    def embed_query(self, query: str) -> list[float]:
+        """Embed a single query string.
+
+        Args:
+            query: Query text to embed
+
+        Returns:
+            Embedding vector as list of floats
+
+        Raises:
+            ValueError: If query is empty
+            RuntimeError: If embedding fails
+        """
+        if not query.strip():
+            raise ValueError("Cannot embed empty query")
+
+        logger.debug(f"Embedding query: '{query[:50]}...'")
+
+        try:
+            # Encode single query
+            embedding_array: Any = self._model.encode(
+                [query],
+                batch_size=1,
+                show_progress_bar=False,
+                convert_to_numpy=True,
+            )
+
+            # Convert numpy array to list
+            if isinstance(embedding_array, np.ndarray):
+                embedding_list: list[float] = embedding_array[0].tolist()
+            else:
+                raise RuntimeError(
+                    f"Unexpected embedding type: {type(embedding_array)}"
+                )
+
+            logger.debug(f"Successfully embedded query (dim={len(embedding_list)})")
+
+            return embedding_list
+
+        except Exception as e:
+            logger.error(f"Query embedding failed: {e}")
+            raise RuntimeError(f"Failed to embed query: {e}") from e
+
     @property
     def model_name(self) -> str:
         """Get model name."""
