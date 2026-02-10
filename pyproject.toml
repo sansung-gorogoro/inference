@@ -15,9 +15,6 @@ dependencies = [
     "openai>=1.0.0",
     "tiktoken>=0.5.0",
     "wtpsplit>=2.0.0",
-]
-
-[project.optional-dependencies]
-gpu = [
-    "torch>=2.0.0",
+    "sentence-transformers>=2.0.0",
+    "torch>=2.0.0,<2.3.0",
 ]
