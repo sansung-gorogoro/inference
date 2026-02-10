@@ -6,7 +6,15 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import httpx
+from openai import AuthenticationError, RateLimitError
 
+from ..pipeline.orchestrator import PipelineOrchestrator
+from ..stt.exceptions import (
+    APIAuthError,
+    APIRateLimitError,
+    DecodeError,
+    OOMError,
+)
 from .models import ErrorCode, Job, JobError, JobResult, JobStatus, JobType
 
 logger = logging.getLogger(__name__)
@@ -17,6 +25,7 @@ class JobManager:
         self._jobs: dict[str, Job] = {}
         self._gpu_semaphore: asyncio.Semaphore = asyncio.Semaphore(max_gpu_workers)
         self._lock: asyncio.Lock = asyncio.Lock()
+        self._pipeline: PipelineOrchestrator = PipelineOrchestrator()
 
     async def submit_job(
         self,
@@ -99,7 +108,65 @@ class JobManager:
                     },
                 )
 
+            except (DecodeError, OOMError, APIAuthError, APIRateLimitError) as e:
+                # STT-specific errors
+                error = JobError(
+                    code=e.code,
+                    message=e.message,
+                    details=e.details,
+                )
+                job.mark_failed(error)
+
+                logger.error(
+                    "Job failed (STT error)",
+                    extra={
+                        "job_id": job_id,
+                        "error_code": error.code.value,
+                        "error_message": error.message,
+                    },
+                    exc_info=True,
+                )
+
+            except AuthenticationError as e:
+                # OpenAI quiz API authentication error
+                error = JobError(
+                    code=ErrorCode.API_AUTH_ERROR,
+                    message=str(e),
+                    details={"service": "openai_quiz"},
+                )
+                job.mark_failed(error)
+
+                logger.error(
+                    "Job failed (OpenAI authentication error)",
+                    extra={
+                        "job_id": job_id,
+                        "error_code": error.code.value,
+                        "error_message": error.message,
+                    },
+                    exc_info=True,
+                )
+
+            except RateLimitError as e:
+                # OpenAI quiz API rate limit error
+                error = JobError(
+                    code=ErrorCode.API_RATE_LIMIT,
+                    message=str(e),
+                    details={"service": "openai_quiz"},
+                )
+                job.mark_failed(error)
+
+                logger.error(
+                    "Job failed (OpenAI rate limit)",
+                    extra={
+                        "job_id": job_id,
+                        "error_code": error.code.value,
+                        "error_message": error.message,
+                    },
+                    exc_info=True,
+                )
+
             except Exception as e:
+                # Generic pipeline error
                 error = JobError(
                     code=ErrorCode.PIPELINE_ERROR,
                     message=str(e),
@@ -108,7 +175,7 @@ class JobManager:
                 job.mark_failed(error)
 
                 logger.error(
-                    "Job failed",
+                    "Job failed (pipeline error)",
                     extra={
                         "job_id": job_id,
                         "error_code": error.code.value,
@@ -119,8 +186,63 @@ class JobManager:
 
     async def _execute_pipeline(self, job: Job) -> JobResult:
         if job.type == JobType.PROCESS_LECTURE:
-            result = JobResult()
+            # Execute pipeline in asyncio loop
+            loop = asyncio.get_event_loop()
 
+            # Extract config parameters with type safety
+            num_questions_val = job.config.get("num_questions", 10)
+            num_questions = (
+                int(num_questions_val)
+                if isinstance(num_questions_val, (int, str))
+                else 10
+            )
+
+            retrieval_top_k_val = job.config.get("retrieval_top_k", 10)
+            retrieval_top_k = (
+                int(retrieval_top_k_val)
+                if isinstance(retrieval_top_k_val, (int, str))
+                else 10
+            )
+
+            stt_mode_val = job.config.get("stt_mode")
+            stt_mode = str(stt_mode_val) if stt_mode_val is not None else None
+
+            # Run synchronous pipeline in executor
+            quiz = await loop.run_in_executor(
+                None,
+                self._pipeline.process_lecture,
+                job.audio_path,
+                job.course_id,
+                job.lecture_id,
+                num_questions,
+                retrieval_top_k,
+                stt_mode,
+            )
+
+            # Convert quiz to dict
+            quiz_dict: dict[str, object] = {
+                "course_id": quiz.course_id,
+                "lecture_id": quiz.lecture_id,
+                "questions": [
+                    {
+                        "question": q.question,
+                        "options": [opt.text for opt in q.options],
+                        "correct_index": q.correct_index,
+                        "explanation": q.explanation,
+                    }
+                    for q in quiz.questions
+                ],
+            }
+
+            # Create result
+            result = JobResult(
+                quiz=quiz_dict,
+                delivered=False,
+                delivery_http_status=None,
+                delivery_error=None,
+            )
+
+            # Deliver callback if URL provided
             if job.callback_url:
                 result = await self._deliver_callback(job, result)
 
