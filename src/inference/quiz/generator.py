@@ -190,34 +190,34 @@ class QuizGenerator:
         Returns:
             System prompt string
         """
-        return """You are an expert quiz generator for educational content.
+        return """당신은 교육 콘텐츠 전문 퀴즈 출제자입니다.
 
-Your task is to generate multiple choice questions (MCQs) based on provided lecture context.
+주어진 강의 내용을 바탕으로 4지선다형 객관식 문제(MCQ)를 생성하는 것이 당신의 역할입니다.
 
-Requirements:
-- Each question must have exactly 4 options
-- Only one option is correct
-- Questions should test understanding, not just memorization
-- Options should be plausible and non-trivial
-- Avoid obvious wrong answers like "None of the above"
-- Provide optional explanations for correct answers
+출제 기준:
+- 각 문제는 반드시 4개의 보기를 가져야 합니다
+- 정답은 반드시 1개여야 합니다
+- 단순 암기가 아닌 내용 이해를 평가하는 문제를 출제하세요
+- 보기는 그럴듯하고 변별력이 있어야 합니다
+- "해당 없음", "위의 모두" 같은 보기는 사용하지 마세요
+- 각 문제에 정답에 대한 해설을 작성하세요
 
-Output format (JSON):
+출력 형식 (JSON):
 {
   "questions": [
     {
-      "question": "What is machine learning?",
-      "options": ["A subset of AI", "A programming language", "A database system", "An operating system"],
+      "question": "머신러닝의 정의로 가장 적절한 것은?",
+      "options": ["인공지능의 한 분야로 데이터로부터 학습하는 알고리즘을 다룬다", "웹 개발에 사용되는 프로그래밍 언어이다", "대규모 데이터를 저장하는 데이터베이스 시스템이다", "컴퓨터 하드웨어를 관리하는 운영체제이다"],
       "correct_index": 0,
-      "explanation": "Machine learning is a subset of artificial intelligence that focuses on training algorithms to learn from data."
+      "explanation": "머신러닝은 명시적으로 프로그래밍하지 않아도 데이터로부터 패턴을 학습하여 예측이나 결정을 수행하는 인공지능의 한 분야입니다."
     }
   ]
 }
 
-Important:
-- correct_index is 0-based (0, 1, 2, or 3)
-- explanation is optional but recommended
-- Generate diverse questions covering different aspects of the content"""
+유의사항:
+- correct_index는 0부터 시작합니다 (0, 1, 2, 3 중 하나)
+- explanation은 반드시 작성해 주세요
+- 강의 내용의 다양한 측면을 고르게 다루는 문제를 출제하세요"""
 
     def _build_user_prompt(self, context: str, num_questions: int) -> str:
         """Build user prompt with context and requirements.
@@ -229,12 +229,12 @@ Important:
         Returns:
             User prompt string
         """
-        return f"""Based on the following lecture content, generate {num_questions} multiple choice questions.
+        return f"""다음 강의 내용을 바탕으로 객관식 문제 {num_questions}개를 출제해 주세요.
 
-Context:
+강의 내용:
 {context}
 
-Generate exactly {num_questions} questions in JSON format as specified in the system prompt."""
+위 내용을 바탕으로 정확히 {num_questions}개의 문제를 시스템 프롬프트에 지정된 JSON 형식으로 생성하세요."""
 
     def _parse_quiz(
         self, quiz_dict: dict[str, Any], course_id: int, lecture_id: int
