@@ -12,7 +12,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-OUTPUTS_BASE_DIR = Path("output")
+OUTPUTS_BASE_DIR = Path("outputs")
 
 
 def write_stage_output(
@@ -71,7 +71,7 @@ def write_stage_output(
         delete=False,
         suffix=".tmp",
     ) as tmp_file:
-        json.dump(envelope, tmp_file, indent=2)
+        json.dump(envelope, tmp_file, indent=2, ensure_ascii=False)
         tmp_path = Path(tmp_file.name)
 
     # Atomic rename
