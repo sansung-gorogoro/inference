@@ -5,7 +5,6 @@ import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
-import httpx
 from openai import AuthenticationError, RateLimitError
 
 from ..pipeline.orchestrator import PipelineOrchestrator
@@ -37,9 +36,6 @@ class JobManager:
         config: dict[str, object] | None = None,
     ) -> str:
         job_id = str(uuid4())
-
-        if type == JobType.PROCESS_LECTURE and not callback_url:
-            raise ValueError("callback_url is required for process_lecture job type")
 
         job = Job(
             job_id=job_id,
@@ -255,63 +251,6 @@ class JobManager:
             raise ValueError(f"Unsupported job type: {job.type.value}")
 
     async def _deliver_callback(self, job: Job, result: JobResult) -> JobResult:
-        if not job.callback_url:
-            return result
-
-        payload = {
-            "job_id": job.job_id,
-            "type": job.type.value,
-            "course_id": job.course_id,
-            "lecture_id": job.lecture_id,
-            "status": "completed",
-            "result": {
-                "transcript": result.transcript,
-                "chunks": result.chunks,
-                "index": result.index,
-                "quiz": result.quiz,
-            },
-        }
-
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(job.callback_url, json=payload)
-
-                logger.info(
-                    "Callback delivered",
-                    extra={
-                        "job_id": job.job_id,
-                        "callback_url": job.callback_url,
-                        "status_code": response.status_code,
-                    },
-                )
-
-                return JobResult(
-                    transcript=result.transcript,
-                    chunks=result.chunks,
-                    index=result.index,
-                    quiz=result.quiz,
-                    delivered=True,
-                    delivery_http_status=response.status_code,
-                    delivery_error=None,
-                )
-
-        except Exception as e:
-            logger.error(
-                "Callback delivery failed",
-                extra={
-                    "job_id": job.job_id,
-                    "callback_url": job.callback_url,
-                    "error": str(e),
-                },
-                exc_info=True,
-            )
-
-            return JobResult(
-                transcript=result.transcript,
-                chunks=result.chunks,
-                index=result.index,
-                quiz=result.quiz,
-                delivered=False,
-                delivery_http_status=None,
-                delivery_error=str(e),
-            )
+        # No-op: callback delivery disabled for PoC
+        # Always return result with delivered=False
+        return result
