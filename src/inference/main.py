@@ -7,6 +7,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+# Load environment variables BEFORE importing router (which triggers import-time initialization)
+from .env import load_env
+
+load_env()
+
 from .api.routes import router
 from .api.schemas import HealthResponse
 
