@@ -33,13 +33,11 @@ class QueryFilter(BaseModel):
     course_id: int | None = None
     lecture_id: int | None = None
 
-    def to_where_clause(self) -> dict[str, int] | None:
-        where: dict[str, int] = {}
+    def to_where_clause(self) -> dict[str, object] | None:
+        if self.lecture_id is not None:
+            return {"lecture_id": {"$eq": self.lecture_id}}
 
         if self.course_id is not None:
-            where["course_id"] = self.course_id
+            return {"course_id": {"$eq": self.course_id}}
 
-        if self.lecture_id is not None:
-            where["lecture_id"] = self.lecture_id
-
-        return where if where else None
+        return None

@@ -118,7 +118,8 @@ class ChromaVectorStore:
     def delete_lecture_chunks(self, course_id: int, lecture_id: int) -> None:
         collection = self.create_or_get_collection()
 
-        where_clause = {"course_id": course_id, "lecture_id": lecture_id}
+        # lecture_id is globally unique; single-operator where satisfies Chroma syntax
+        where_clause: dict[str, Any] = {"lecture_id": {"$eq": lecture_id}}
 
         try:
             collection.delete(where=where_clause)
