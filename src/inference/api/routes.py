@@ -2,23 +2,30 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 
 from ..jobs.manager import JobManager
 from ..jobs.models import JobType
+from ..vectorstore.chroma_client import ChromaVectorStore
 from .schemas import (
+    ErrorDetail,
     HealthResponse,
     JobErrorData,
     JobResultData,
     JobStatusResponse,
     JobSubmissionRequest,
     JobSubmissionResponse,
+    PipelineErrorResponse,
+    PipelineFullRequest,
+    PipelineResponse,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1")
 job_manager = JobManager(max_gpu_workers=1)
+vectorstore = ChromaVectorStore()
 
 
 @router.get("/health", response_model=HealthResponse, tags=["Health"])
@@ -119,3 +126,102 @@ async def get_job_status(job_id: str) -> JobStatusResponse:
         created_at=job.created_at.isoformat(),
         updated_at=job.updated_at.isoformat(),
     )
+
+
+@router.post(
+    "/pipelines/full",
+    response_model=PipelineResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Pipelines"],
+)
+async def pipeline_full(request: PipelineFullRequest) -> PipelineResponse:
+    try:
+        job_id = await job_manager.submit_job(
+            type=JobType.PROCESS_LECTURE,
+            course_id=request.course_id,
+            lecture_id=request.lecture_id,
+            audio_path=request.audio_path,
+            callback_url=None,
+            config=request.config or {},
+        )
+
+        logger.info(
+            "Full pipeline job submitted",
+            extra={
+                "job_id": job_id,
+                "course_id": request.course_id,
+                "lecture_id": request.lecture_id,
+            },
+        )
+
+        return PipelineResponse(job_id=job_id, status="pending")
+
+    except Exception as e:
+        logger.error(
+            "Full pipeline submission failed",
+            extra={"error": str(e)},
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
+        )
+
+
+@router.post(
+    "/pipelines/quiz",
+    response_model=PipelineResponse,
+    responses={400: {"model": PipelineErrorResponse, "description": "Index not ready"}},
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Pipelines"],
+)
+async def pipeline_quiz(
+    course_id: int = Query(..., gt=0),
+    lecture_id: int = Query(..., gt=0),
+) -> PipelineResponse | JSONResponse:
+    if not vectorstore.has_lecture(lecture_id):
+        logger.warning(
+            "Quiz generation failed: index not ready",
+            extra={"course_id": course_id, "lecture_id": lecture_id},
+        )
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": {
+                    "code": "INDEX_NOT_READY",
+                    "message": f"No index found for lecture_id={lecture_id}. Run full pipeline first.",
+                }
+            },
+        )
+
+    try:
+        job_id = await job_manager.submit_job(
+            type=JobType.GENERATE_QUIZ,
+            course_id=course_id,
+            lecture_id=lecture_id,
+            audio_path=None,
+            callback_url=None,
+            config={},
+        )
+
+        logger.info(
+            "Quiz-only job submitted",
+            extra={
+                "job_id": job_id,
+                "course_id": course_id,
+                "lecture_id": lecture_id,
+            },
+        )
+
+        return PipelineResponse(job_id=job_id, status="pending")
+
+    except Exception as e:
+        logger.error(
+            "Quiz-only submission failed",
+            extra={"error": str(e)},
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
+        )

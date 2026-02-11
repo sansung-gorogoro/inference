@@ -137,3 +137,16 @@ class ChromaVectorStore:
         collection = self.create_or_get_collection()
 
         return {"total_vectors": collection.count()}
+
+    def has_lecture(self, lecture_id: int) -> bool:
+        collection = self.create_or_get_collection()
+
+        try:
+            result = collection.get(where={"lecture_id": {"$eq": lecture_id}}, limit=1)
+
+            return len(result["ids"]) > 0
+        except Exception as e:
+            logger.error(
+                f"Failed to check lecture existence for lecture_id={lecture_id}: {e}"
+            )
+            return False

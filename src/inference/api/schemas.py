@@ -50,3 +50,24 @@ class JobStatusResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"]
+
+
+class PipelineFullRequest(BaseModel):
+    course_id: int = Field(..., gt=0)
+    lecture_id: int = Field(..., gt=0)
+    audio_path: str = Field(..., min_length=1)
+    config: dict[str, object] | None = None
+
+
+class PipelineResponse(BaseModel):
+    job_id: str
+    status: str
+
+
+class ErrorDetail(BaseModel):
+    code: str
+    message: str
+
+
+class PipelineErrorResponse(BaseModel):
+    error: ErrorDetail
