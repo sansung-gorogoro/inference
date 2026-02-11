@@ -132,7 +132,7 @@ class PipelineOrchestrator:
         logger.info("[Stage 2/6] Starting chunking")
 
         try:
-            chunks = chunk_transcript(
+            chunks, chunking_params = chunk_transcript(
                 transcript=transcript,
                 course_id=course_id,
                 lecture_id=lecture_id,

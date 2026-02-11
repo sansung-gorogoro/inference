@@ -20,9 +20,9 @@ from inference.chunking.silence_chunker import IntermediateChunk
 
 logger = logging.getLogger(__name__)
 
-# Token limits
-MAX_TOKENS = 800
-OVERLAP_TOKENS = 160  # 20% of 800
+# WARNING: Changing token limits (CHUNK_MAX_TOKENS, CHUNK_OVERLAP_TOKENS) changes chunk boundaries
+# and can invalidate existing embeddings/index. For repeatable quiz-only regeneration,
+# keep these values stable per dataset unless you intend to re-index.
 
 
 @dataclass(frozen=True)
@@ -143,8 +143,8 @@ class SentenceSplitter:
 
 def chunk_by_sentences(
     chunks: list[IntermediateChunk],
-    max_tokens: int = MAX_TOKENS,
-    overlap_tokens: int = OVERLAP_TOKENS,
+    max_tokens: int = 800,
+    overlap_tokens: int = 160,
 ) -> list[TokenizedChunk]:
     """Split oversized chunks at sentence boundaries with overlap.
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from inference.chunking.models import Chunk
 from inference.chunking.sentence_chunker import chunk_by_sentences
@@ -16,25 +17,30 @@ def chunk_transcript(
     transcript: TranscriptResult,
     course_id: int,
     lecture_id: int,
-    silence_threshold: float = 2.0,
-    max_tokens: int = 800,
-    overlap_tokens: int = 160,
-) -> list[Chunk]:
+    silence_threshold: float | None = None,
+    max_tokens: int | None = None,
+    overlap_tokens: int | None = None,
+) -> tuple[list[Chunk], dict[str, float | int]]:
     """Chunk transcript using two-pass strategy.
 
     Pass 1: Group segments by silence gaps
     Pass 2: Split oversized chunks at sentence boundaries with overlap
 
+    Env vars (all optional; defaults remain unchanged):
+        CHUNK_SILENCE_THRESHOLD_SECONDS: float, default 2.0
+        CHUNK_MAX_TOKENS: int, default 800
+        CHUNK_OVERLAP_TOKENS: int, default 160
+
     Args:
         transcript: Transcription result with segments
         course_id: Course identifier (must be > 0)
         lecture_id: Lecture identifier (must be > 0)
-        silence_threshold: Maximum gap in seconds to group segments (default: 2.0)
-        max_tokens: Maximum tokens per chunk (default: 800)
-        overlap_tokens: Number of overlap tokens between chunks (default: 160)
+        silence_threshold: Maximum gap in seconds to group segments (default: from env or 2.0)
+        max_tokens: Maximum tokens per chunk (default: from env or 800)
+        overlap_tokens: Number of overlap tokens between chunks (default: from env or 160)
 
     Returns:
-        List of chunks with stable IDs and timestamps
+        Tuple of (list of chunks with stable IDs and timestamps, dict of resolved parameters)
 
     Raises:
         ValueError: If course_id or lecture_id is invalid, or transcript is empty
@@ -46,29 +52,46 @@ def chunk_transcript(
     if not transcript.segments:
         raise ValueError("Transcript must contain at least one segment")
 
+    # Resolve env defaults: caller-provided explicit values always win
+    resolved_silence_threshold = (
+        silence_threshold
+        if silence_threshold is not None
+        else float(os.getenv("CHUNK_SILENCE_THRESHOLD_SECONDS", "2.0"))
+    )
+    resolved_max_tokens = (
+        max_tokens
+        if max_tokens is not None
+        else int(os.getenv("CHUNK_MAX_TOKENS", "800"))
+    )
+    resolved_overlap_tokens = (
+        overlap_tokens
+        if overlap_tokens is not None
+        else int(os.getenv("CHUNK_OVERLAP_TOKENS", "160"))
+    )
+
     logger.info(
         "Starting transcript chunking",
         extra={
             "course_id": course_id,
             "lecture_id": lecture_id,
             "segments": len(transcript.segments),
-            "silence_threshold": silence_threshold,
-            "max_tokens": max_tokens,
-            "overlap_tokens": overlap_tokens,
+            "silence_threshold": resolved_silence_threshold,
+            "max_tokens": resolved_max_tokens,
+            "overlap_tokens": resolved_overlap_tokens,
         },
     )
 
     # Pass 1: Silence-gap chunking
     intermediate_chunks = chunk_by_silence(
         segments=transcript.segments,
-        silence_threshold=silence_threshold,
+        silence_threshold=resolved_silence_threshold,
     )
 
     # Pass 2: Sentence-boundary chunking
     tokenized_chunks = chunk_by_sentences(
         chunks=intermediate_chunks,
-        max_tokens=max_tokens,
-        overlap_tokens=overlap_tokens,
+        max_tokens=resolved_max_tokens,
+        overlap_tokens=resolved_overlap_tokens,
     )
 
     # Generate final chunks with stable IDs
@@ -104,4 +127,10 @@ def chunk_transcript(
         },
     )
 
-    return final_chunks
+    resolved_params = {
+        "silence_threshold": resolved_silence_threshold,
+        "max_tokens": resolved_max_tokens,
+        "overlap_tokens": resolved_overlap_tokens,
+    }
+
+    return final_chunks, resolved_params
