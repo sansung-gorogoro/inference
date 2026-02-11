@@ -252,3 +252,6 @@ Temporary Items
 AGENTS.md
 CLAUDE.md
 GEMINI.md
+
+# Pipeline stage output
+outputs/

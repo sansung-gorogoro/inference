@@ -38,6 +38,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# Load environment variables BEFORE module-level os.getenv() reads below
+_repo_root = Path(__file__).resolve().parents[1]
+if str(_repo_root / "src") not in sys.path:
+    sys.path.insert(0, str(_repo_root / "src"))
+from inference.env import load_env  # noqa: E402
+
+load_env()
+
 import requests
 
 logging.basicConfig(

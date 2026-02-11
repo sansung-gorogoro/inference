@@ -12,7 +12,7 @@ from openai import AuthenticationError, RateLimitError
 from ..chunking.chunker import chunk_transcript
 from ..embedding.embedder import Embedder
 from ..jobs.models import Job, JobStatus, JobType
-from ..outputs.writer import write_stage_output
+from ..output.writer import write_stage_output
 from ..quiz.generator import QuizGenerator
 from ..quiz.models import Quiz
 from ..retrieval.retriever import Retriever
@@ -34,7 +34,7 @@ class PipelineOrchestrator:
     - Segment A: STT → chunking → embed/index
     - Segment B: retrieval → quiz generation
 
-    Stage outputs written at 5 boundaries:
+    Stage output written at 5 boundaries:
     - stage-01-transcript: After STT
     - stage-02-chunks: After chunking
     - stage-03-index: After embedding/indexing
@@ -71,7 +71,7 @@ class PipelineOrchestrator:
     def _run_segment_a(self, job: Job) -> None:
         """Run Segment A: STT → chunking → embed/index.
 
-        Writes stage outputs:
+        Writes stage output:
         - stage-01-transcript: Transcript with segments
         - stage-02-chunks: Chunks with resolved parameters
         - stage-03-index: Indexing statistics
@@ -212,7 +212,7 @@ class PipelineOrchestrator:
     def _run_segment_b(self, job: Job) -> Quiz:
         """Run Segment B: retrieval → quiz generation.
 
-        Writes stage outputs:
+        Writes stage output:
         - stage-04-retrieval: Retrieved citations
         - stage-05-quiz: Generated quiz
 
