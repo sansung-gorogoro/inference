@@ -59,6 +59,15 @@ class Embedder:
         if not chunks:
             raise ValueError("Cannot embed and index empty chunks list")
 
+        for chunk in chunks:
+            if chunk.course_id != course_id or chunk.lecture_id != lecture_id:
+                raise ValueError(
+                    "Chunk metadata does not match embed_and_index scope: "
+                    + f"expected course_id={course_id}, lecture_id={lecture_id}, "
+                    + f"got course_id={chunk.course_id}, lecture_id={chunk.lecture_id} "
+                    + f"for chunk_id={chunk.chunk_id}"
+                )
+
         logger.info(
             f"Starting embed_and_index for course_id={course_id}, lecture_id={lecture_id}, chunks={len(chunks)}"
         )

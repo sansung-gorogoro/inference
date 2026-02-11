@@ -136,7 +136,28 @@ def test_embedding_and_indexing() -> None:
 
     # Test 4: Multiple lectures
     print("Test 4: Indexing multiple lectures...")
-    embedder.embed_and_index(course_id=1, lecture_id=2, chunks=chunks[:2])
+    
+    lecture2_chunks = [
+        Chunk(
+            chunk_id="test_lec2_chunk_001",
+            text=chunks[0].text,
+            start_time=chunks[0].start_time,
+            end_time=chunks[0].end_time,
+            token_count=chunks[0].token_count,
+            course_id=1,
+            lecture_id=2,
+        ),
+        Chunk(
+            chunk_id="test_lec2_chunk_002",
+            text=chunks[1].text,
+            start_time=chunks[1].start_time,
+            end_time=chunks[1].end_time,
+            token_count=chunks[1].token_count,
+            course_id=1,
+            lecture_id=2,
+        ),
+    ]
+    embedder.embed_and_index(course_id=1, lecture_id=2, chunks=lecture2_chunks)
 
     stats = vectorstore.get_collection_stats()
     print(f"  Total vectors: {stats['total_vectors']}")

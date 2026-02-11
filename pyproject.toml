@@ -16,5 +16,15 @@ dependencies = [
     "tiktoken>=0.5.0",
     "wtpsplit>=2.0.0",
     "sentence-transformers>=2.0.0",
-    "torch>=2.0.0,<2.3.0",
+    "torch>=2.2.0,<2.3.0",
+    "onnxruntime>=1.24.1",
+    "numpy>=1.26,<2",
 ]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu121" }
+
+[[tool.uv.index]]
+name = "pytorch-cu121"
+url = "https://download.pytorch.org/whl/cu121"
+explicit = true

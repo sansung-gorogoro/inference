@@ -143,15 +143,20 @@ def validate_chunks(chunks: list[Chunk], max_tokens: int = 800) -> None:
     if valid_timestamps:
         print("✅ PASS: All timestamps are valid")
 
-    # Check timestamps are in order
-    timestamps_in_order = True
+    # Check timestamps are monotonic (overlap between chunks is allowed)
+    monotonic_starts = True
+    monotonic_ends = True
     for i in range(len(chunks) - 1):
-        if chunks[i].end_time > chunks[i + 1].start_time:
-            timestamps_in_order = False
-            print(f"❌ FAIL: Timestamps not in order between chunks {i} and {i + 1}")
-
-    if timestamps_in_order:
-        print("✅ PASS: Timestamps are in chronological order")
+        if chunks[i].start_time > chunks[i + 1].start_time:
+            monotonic_starts = False
+            print(f"❌ FAIL: start_time decreased between chunks {i} and {i + 1}")
+        if chunks[i].end_time > chunks[i + 1].end_time:
+            monotonic_ends = False
+            print(f"❌ FAIL: end_time decreased between chunks {i} and {i + 1}")
+    if monotonic_starts:
+        print("✅ PASS: Chunk start_times are monotonically non-decreasing")
+    if monotonic_ends:
+        print("✅ PASS: Chunk end_times are monotonically non-decreasing")
 
     print(f"\n{'=' * 80}\n")
 
