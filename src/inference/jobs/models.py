@@ -53,7 +53,7 @@ class Job:
     type: JobType
     course_id: int
     lecture_id: int
-    audio_path: str
+    audio_path: str | None
     callback_url: str | None
     config: dict[str, object]
     status: JobStatus

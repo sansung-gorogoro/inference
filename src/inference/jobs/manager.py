@@ -31,7 +31,7 @@ class JobManager:
         type: JobType,
         course_id: int,
         lecture_id: int,
-        audio_path: str,
+        audio_path: str | None = None,
         callback_url: str | None = None,
         config: dict[str, object] | None = None,
     ) -> str:
@@ -182,6 +182,13 @@ class JobManager:
 
     async def _execute_pipeline(self, job: Job) -> JobResult:
         if job.type == JobType.PROCESS_LECTURE:
+            # Validate audio_path is provided for process_lecture
+            if not job.audio_path:
+                raise ValueError("audio_path is required for process_lecture job type")
+
+            # Type narrowing for basedpyright
+            assert job.audio_path is not None
+
             # Execute pipeline in asyncio loop
             loop = asyncio.get_event_loop()
 
@@ -244,7 +251,43 @@ class JobManager:
 
             return result
 
-        elif job.type in {JobType.TRANSCRIBE, JobType.GENERATE_QUIZ}:
+        elif job.type == JobType.GENERATE_QUIZ:
+            # Execute Segment B only (retrieval → quiz)
+            loop = asyncio.get_event_loop()
+
+            # Run Segment B in executor
+            quiz = await loop.run_in_executor(
+                None,
+                self._pipeline._run_segment_b,
+                job,
+            )
+
+            # Convert quiz to dict (same as process_lecture)
+            quiz_dict: dict[str, object] = {
+                "course_id": quiz.course_id,
+                "lecture_id": quiz.lecture_id,
+                "questions": [
+                    {
+                        "question": q.question,
+                        "options": [opt.text for opt in q.options],
+                        "correct_index": q.correct_index,
+                        "explanation": q.explanation,
+                    }
+                    for q in quiz.questions
+                ],
+            }
+
+            # Create result
+            result = JobResult(
+                quiz=quiz_dict,
+                delivered=False,
+                delivery_http_status=None,
+                delivery_error=None,
+            )
+
+            return result
+
+        elif job.type == JobType.TRANSCRIBE:
             return JobResult()
 
         else:

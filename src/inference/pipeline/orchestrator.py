@@ -86,6 +86,13 @@ class PipelineOrchestrator:
             APIRateLimitError: If STT API rate limit is exceeded
             RuntimeError: For other stage errors
         """
+        # Validate audio_path is provided for Segment A
+        if not job.audio_path:
+            raise ValueError("audio_path is required for Segment A (STT)")
+
+        # Type narrowing for basedpyright
+        assert job.audio_path is not None
+
         # Extract config (with type narrowing)
         stt_mode_raw = job.config.get("stt_mode")
         stt_mode: str | None = str(stt_mode_raw) if stt_mode_raw is not None else None

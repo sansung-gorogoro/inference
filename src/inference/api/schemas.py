@@ -9,7 +9,7 @@ class JobSubmissionRequest(BaseModel):
     type: Literal["process_lecture", "transcribe", "generate_quiz"]
     course_id: int = Field(..., gt=0)
     lecture_id: int = Field(..., gt=0)
-    audio_path: str = Field(..., min_length=1)
+    audio_path: str | None = None
     callback_url: str | None = None
     config: dict[str, object] | None = None
 
