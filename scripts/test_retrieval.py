@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from inference.chunking import Chunk, chunk_transcript
 from inference.embedding import Embedder
 from inference.retrieval import Citation, RetrievalResult, Retriever
-from inference.stt.models import Segment, Transcript
+from inference.stt.models import Segment, TranscriptResult
 
 print("=" * 80)
 print("Retrieval Module Test")
@@ -51,12 +51,16 @@ segments = [
     ),
 ]
 
-transcript = Transcript(segments=segments, language="en")
+transcript = TranscriptResult(segments=segments, language="en", duration=segments[-1].end)
 print(f"✓ Created transcript with {len(transcript.segments)} segments")
 
 print("\n[2] Chunking transcript...")
 chunks = chunk_transcript(
-    transcript=transcript, course_id=1, lecture_id=1, target_tokens=30
+    transcript=transcript,
+    course_id=1,
+    lecture_id=1,
+    max_tokens=30,
+    overlap_tokens=6
 )
 print(f"✓ Created {len(chunks)} chunks")
 for i, chunk in enumerate(chunks, 1):
