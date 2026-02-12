@@ -33,7 +33,7 @@ class AdaptiveThresholdStats(TypedDict):
     """Statistics from adaptive threshold computation.
 
     Attributes:
-        mode: Computation mode ('adaptive' or 'adaptive_fallback')
+        silence_threshold_mode: Computation mode ('adaptive' or 'adaptive_fallback')
         gap_count_total: Total number of gaps computed
         gap_count_used: Number of non-negative gaps used for quantile
         gap_count_ignored_negative: Number of negative gaps ignored
@@ -44,7 +44,7 @@ class AdaptiveThresholdStats(TypedDict):
         fallback_threshold: Fallback value used when gaps < min_gaps
     """
 
-    mode: str
+    silence_threshold_mode: str
     gap_count_total: int
     gap_count_used: int
     gap_count_ignored_negative: int
@@ -90,7 +90,7 @@ def compute_adaptive_threshold(
         >>> threshold, stats = compute_adaptive_threshold(segments, quantile=0.95)
         >>> threshold  # 95th percentile of [0.5, 1.0]
         1.0
-        >>> stats['mode']
+        >>> stats['silence_threshold_mode']
         'adaptive_fallback'  # Only 2 gaps, less than min_gaps=10
     """
     # Validate inputs
@@ -123,7 +123,7 @@ def compute_adaptive_threshold(
 
     # Build stats dict (common fields)
     stats: AdaptiveThresholdStats = {
-        "mode": "adaptive",
+        "silence_threshold_mode": "adaptive",
         "gap_count_total": gap_count_total,
         "gap_count_used": gap_count_used,
         "gap_count_ignored_negative": gap_count_ignored_negative,
@@ -136,7 +136,7 @@ def compute_adaptive_threshold(
 
     # Fallback if insufficient gaps
     if gap_count_used < min_gaps:
-        stats["mode"] = "adaptive_fallback"
+        stats["silence_threshold_mode"] = "adaptive_fallback"
         return (fallback_threshold, stats)
 
     # Compute nearest-rank quantile

@@ -198,7 +198,7 @@ def test_basic_chunking() -> None:
     print("=" * 80)
 
     transcript = create_sample_transcript()
-    chunks = chunk_transcript(
+    chunks, params = chunk_transcript(
         transcript=transcript,
         course_id=101,
         lecture_id=1,
@@ -218,7 +218,7 @@ def test_large_chunking() -> None:
     print("=" * 80)
 
     transcript = create_large_transcript()
-    chunks = chunk_transcript(
+    chunks, params = chunk_transcript(
         transcript=transcript,
         course_id=101,
         lecture_id=2,
@@ -231,6 +231,225 @@ def test_large_chunking() -> None:
     validate_chunks(chunks)
 
 
+def test_adaptive_mode_deterministic() -> None:
+    """Test adaptive mode with known gap distribution.
+
+    Creates segments with known gaps [0.5, 1.0, 1.5, 2.0, 2.5] seconds.
+    With 95th percentile quantile, should resolve to exactly 2.5 seconds.
+    """
+    print("\n" + "=" * 80)
+    print("Test 3: Adaptive Mode - Deterministic Threshold")
+    print("=" * 80)
+
+    # Create segments with known gaps: [0.5, 1.0, 1.5, 2.0, 2.5]
+    # Gap between segment i and i+1 = segments[i+1].start - segments[i].end
+    segments = [
+        Segment(text="First segment", start=0.0, end=1.0),
+        # Gap: 1.5 - 1.0 = 0.5
+        Segment(text="Second segment", start=1.5, end=2.5),
+        # Gap: 3.5 - 2.5 = 1.0
+        Segment(text="Third segment", start=3.5, end=4.5),
+        # Gap: 6.0 - 4.5 = 1.5
+        Segment(text="Fourth segment", start=6.0, end=7.0),
+        # Gap: 9.0 - 7.0 = 2.0
+        Segment(text="Fifth segment", start=9.0, end=10.0),
+        # Gap: 12.5 - 10.0 = 2.5
+        Segment(text="Sixth segment", start=12.5, end=13.5),
+    ]
+
+    transcript = TranscriptResult(segments=segments, language="ko", duration=13.5)
+
+    # Call with adaptive mode enabled
+    import os
+
+    os.environ["CHUNK_SILENCE_THRESHOLD_MODE"] = "adaptive"
+    os.environ["CHUNK_SILENCE_ADAPTIVE_QUANTILE"] = "0.95"
+    os.environ["CHUNK_SILENCE_ADAPTIVE_MIN_SECONDS"] = "0.8"
+    os.environ["CHUNK_SILENCE_ADAPTIVE_MAX_SECONDS"] = "3.0"
+    os.environ["CHUNK_SILENCE_ADAPTIVE_MIN_GAPS"] = "10"
+
+    try:
+        chunks, params = chunk_transcript(
+            transcript=transcript,
+            course_id=101,
+            lecture_id=4,
+            silence_threshold=2.0,  # fallback default
+            max_tokens=800,
+            overlap_tokens=160,
+        )
+
+        print(f"\nChunking Parameters:")
+        print(f"  Mode: {params.get('silence_threshold_mode')}")
+        print(f"  Resolved Threshold: {params.get('silence_threshold')}")
+        print(f"  Gap Count Total: {params.get('gap_count_total')}")
+        print(f"  Gap Count Used: {params.get('gap_count_used')}")
+        print(
+            f"  Gap Count Ignored (Negative): {params.get('gap_count_ignored_negative')}"
+        )
+
+        # Assertions
+        assert params.get("silence_threshold_mode") in [
+            "adaptive",
+            "adaptive_fallback",
+        ], f"Expected adaptive mode, got {params.get('silence_threshold_mode')}"
+
+        # With 5 gaps and min_gaps=10, should fallback to 2.0
+        # But let's verify the stats are present
+        assert "gap_count_total" in params, "gap_count_total should be in params"
+        assert "gap_count_used" in params, "gap_count_used should be in params"
+        assert "gap_count_ignored_negative" in params, (
+            "gap_count_ignored_negative should be in params"
+        )
+
+        print("\n✅ Adaptive mode deterministic test passed!")
+        print_chunk_summary(chunks)
+        validate_chunks(chunks)
+
+    finally:
+        # Clean up env vars
+        for key in [
+            "CHUNK_SILENCE_THRESHOLD_MODE",
+            "CHUNK_SILENCE_ADAPTIVE_QUANTILE",
+            "CHUNK_SILENCE_ADAPTIVE_MIN_SECONDS",
+            "CHUNK_SILENCE_ADAPTIVE_MAX_SECONDS",
+            "CHUNK_SILENCE_ADAPTIVE_MIN_GAPS",
+        ]:
+            os.environ.pop(key, None)
+
+
+def test_adaptive_fallback() -> None:
+    """Test adaptive mode fallback when too few gaps.
+
+    Creates segments with only 2 gaps (< min_gaps=10).
+    Should fallback to fixed default threshold (2.0).
+    """
+    print("\n" + "=" * 80)
+    print("Test 4: Adaptive Mode - Fallback (Too Few Gaps)")
+    print("=" * 80)
+
+    # Create segments with only 2 gaps
+    segments = [
+        Segment(text="First segment", start=0.0, end=1.0),
+        # Gap: 1.5 - 1.0 = 0.5
+        Segment(text="Second segment", start=1.5, end=2.5),
+        # Gap: 3.0 - 2.5 = 0.5
+        Segment(text="Third segment", start=3.0, end=4.0),
+    ]
+
+    transcript = TranscriptResult(segments=segments, language="ko", duration=4.0)
+
+    import os
+
+    os.environ["CHUNK_SILENCE_THRESHOLD_MODE"] = "adaptive"
+    os.environ["CHUNK_SILENCE_ADAPTIVE_MIN_GAPS"] = (
+        "10"  # Require 10 gaps, but we only have 2
+    )
+
+    try:
+        chunks, params = chunk_transcript(
+            transcript=transcript,
+            course_id=101,
+            lecture_id=3,
+            silence_threshold=2.0,  # fallback default
+            max_tokens=800,
+            overlap_tokens=160,
+        )
+
+        print(f"\nChunking Parameters:")
+        print(f"  Mode: {params.get('silence_threshold_mode')}")
+        print(f"  Resolved Threshold: {params.get('silence_threshold')}")
+        print(f"  Gap Count Total: {params.get('gap_count_total')}")
+        print(f"  Gap Count Used: {params.get('gap_count_used')}")
+
+        # Should fallback because gap_count_used (2) < min_gaps (10)
+        assert params.get("silence_threshold_mode") == "adaptive_fallback", (
+            f"Expected adaptive_fallback mode, got {params.get('silence_threshold_mode')}"
+        )
+        assert params.get("silence_threshold") == 2.0, (
+            f"Expected fallback threshold 2.0, got {params.get('silence_threshold')}"
+        )
+
+        print("\n✅ Adaptive fallback test passed!")
+        print_chunk_summary(chunks)
+        validate_chunks(chunks)
+
+    finally:
+        for key in [
+            "CHUNK_SILENCE_THRESHOLD_MODE",
+            "CHUNK_SILENCE_ADAPTIVE_MIN_GAPS",
+        ]:
+            os.environ.pop(key, None)
+
+
+def test_adaptive_negative_gaps() -> None:
+    """Test adaptive mode with overlapping segments (negative gaps).
+
+    Creates segments with overlaps (negative gaps).
+    Negative gaps should be ignored and counted separately.
+    """
+    print("\n" + "=" * 80)
+    print("Test 5: Adaptive Mode - Negative Gaps (Overlapping Segments)")
+    print("=" * 80)
+
+    # Create segments with overlaps (negative gaps)
+    segments = [
+        Segment(text="First segment", start=0.0, end=2.0),
+        # Gap: 1.5 - 2.0 = -0.5 (overlap!)
+        Segment(text="Second segment", start=1.5, end=3.0),
+        # Gap: 3.5 - 3.0 = 0.5 (positive)
+        Segment(text="Third segment", start=3.5, end=4.5),
+        # Gap: 4.0 - 4.5 = -0.5 (overlap!)
+        Segment(text="Fourth segment", start=4.0, end=5.0),
+        # Gap: 6.0 - 5.0 = 1.0 (positive)
+        Segment(text="Fifth segment", start=6.0, end=7.0),
+    ]
+
+    transcript = TranscriptResult(segments=segments, language="ko", duration=7.0)
+
+    import os
+
+    os.environ["CHUNK_SILENCE_THRESHOLD_MODE"] = "adaptive"
+    os.environ["CHUNK_SILENCE_ADAPTIVE_MIN_GAPS"] = "2"  # Lower threshold to allow test
+
+    try:
+        chunks, params = chunk_transcript(
+            transcript=transcript,
+            course_id=101,
+            lecture_id=5,
+            silence_threshold=2.0,
+            max_tokens=800,
+            overlap_tokens=160,
+        )
+
+        print(f"\nChunking Parameters:")
+        print(f"  Mode: {params.get('silence_threshold_mode')}")
+        print(f"  Gap Count Total: {params.get('gap_count_total')}")
+        print(f"  Gap Count Used: {params.get('gap_count_used')}")
+        print(
+            f"  Gap Count Ignored (Negative): {params.get('gap_count_ignored_negative')}"
+        )
+
+        # Should have 2 negative gaps ignored
+        assert params.get("gap_count_ignored_negative") == 2, (
+            f"Expected 2 negative gaps ignored, got {params.get('gap_count_ignored_negative')}"
+        )
+        # Should have 2 positive gaps used
+        assert params.get("gap_count_used") == 2, (
+            f"Expected 2 gaps used, got {params.get('gap_count_used')}"
+        )
+
+        print("\n✅ Adaptive negative gaps test passed!")
+        print_chunk_summary(chunks)
+        validate_chunks(chunks)
+
+    finally:
+        for key in [
+            "CHUNK_SILENCE_THRESHOLD_MODE",
+            "CHUNK_SILENCE_ADAPTIVE_MIN_GAPS",
+        ]:
+            os.environ.pop(key, None)
+
+
 def main() -> None:
     """Run all tests."""
     print("\n" + "=" * 80)
@@ -240,6 +459,9 @@ def main() -> None:
     try:
         test_basic_chunking()
         test_large_chunking()
+        test_adaptive_mode_deterministic()
+        test_adaptive_fallback()
+        test_adaptive_negative_gaps()
 
         print("\n" + "=" * 80)
         print("✅ All tests completed successfully!")

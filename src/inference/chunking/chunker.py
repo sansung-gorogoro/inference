@@ -155,16 +155,19 @@ def chunk_transcript(
     )
 
     resolved_params: dict[str, str | float | int] = {
-        "silence_threshold_mode": silence_threshold_mode,
         "silence_threshold": resolved_silence_threshold,
         "max_tokens": resolved_max_tokens,
         "overlap_tokens": resolved_overlap_tokens,
     }
 
     if adaptive_stats is not None:
+        # Merge adaptive stats (includes resolved silence_threshold_mode)
         resolved_params = cast(
             dict[str, str | float | int],
             {**resolved_params, **adaptive_stats},
         )
+    else:
+        # Fixed mode: set mode explicitly
+        resolved_params["silence_threshold_mode"] = silence_threshold_mode
 
     return final_chunks, resolved_params
