@@ -37,6 +37,11 @@ def chunk_transcript(
         CHUNK_SILENCE_ADAPTIVE_MIN_GAPS: int, default 10
         CHUNK_MAX_TOKENS: int, default 800
         CHUNK_OVERLAP_TOKENS: int, default 160
+        CHUNK_SEMANTIC_MODE: 'none' or 'centroid_v1', default 'none'
+        CHUNK_SEMANTIC_ADJ_QUANTILE: float, default 0.2
+        CHUNK_SEMANTIC_SIM_CLAMP_MIN: float, default 0.35
+        CHUNK_SEMANTIC_SIM_CLAMP_MAX: float, default 0.90
+        CHUNK_SEMANTIC_MIN_SENTENCES: int, default 3
 
     Args:
         transcript: Transcription result with segments
@@ -83,6 +88,13 @@ def chunk_transcript(
     adaptive_max_seconds = float(os.getenv("CHUNK_SILENCE_ADAPTIVE_MAX_SECONDS", "3.0"))
     adaptive_min_gaps = int(os.getenv("CHUNK_SILENCE_ADAPTIVE_MIN_GAPS", "10"))
 
+    # Resolve semantic chunking mode and parameters
+    semantic_mode = os.getenv("CHUNK_SEMANTIC_MODE", "none")
+    semantic_adj_quantile = float(os.getenv("CHUNK_SEMANTIC_ADJ_QUANTILE", "0.2"))
+    semantic_sim_clamp_min = float(os.getenv("CHUNK_SEMANTIC_SIM_CLAMP_MIN", "0.35"))
+    semantic_sim_clamp_max = float(os.getenv("CHUNK_SEMANTIC_SIM_CLAMP_MAX", "0.90"))
+    semantic_min_sentences = int(os.getenv("CHUNK_SEMANTIC_MIN_SENTENCES", "3"))
+
     logger.info(
         "Starting transcript chunking",
         extra={
@@ -93,6 +105,7 @@ def chunk_transcript(
             "silence_threshold": resolved_silence_threshold,
             "max_tokens": resolved_max_tokens,
             "overlap_tokens": resolved_overlap_tokens,
+            "semantic_mode": semantic_mode,
         },
     )
 
@@ -113,6 +126,18 @@ def chunk_transcript(
         segments=transcript.segments,
         silence_threshold=resolved_silence_threshold,
     )
+
+    # Pass 1.5: Semantic assembly (opt-in)
+    if semantic_mode == "centroid_v1":
+        from inference.chunking.semantic_chunker import semantic_assembly
+
+        intermediate_chunks = semantic_assembly(
+            chunks=intermediate_chunks,
+            adj_quantile=semantic_adj_quantile,
+            sim_clamp_min=semantic_sim_clamp_min,
+            sim_clamp_max=semantic_sim_clamp_max,
+            min_sentences=semantic_min_sentences,
+        )
 
     # Pass 2: Sentence-boundary chunking
     tokenized_chunks = chunk_by_sentences(
@@ -169,5 +194,12 @@ def chunk_transcript(
     else:
         # Fixed mode: set mode explicitly
         resolved_params["silence_threshold_mode"] = silence_threshold_mode
+
+    resolved_params["semantic_mode"] = semantic_mode
+    if semantic_mode != "none":
+        resolved_params["semantic_adj_quantile"] = semantic_adj_quantile
+        resolved_params["semantic_sim_clamp_min"] = semantic_sim_clamp_min
+        resolved_params["semantic_sim_clamp_max"] = semantic_sim_clamp_max
+        resolved_params["semantic_min_sentences"] = semantic_min_sentences
 
     return final_chunks, resolved_params

@@ -192,6 +192,54 @@ class BGEEmbedder:
             logger.error(f"Query embedding failed: {e}")
             raise RuntimeError(f"Failed to embed query: {e}") from e
 
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        """Embed a list of text strings.
+
+        Args:
+            texts: List of text strings to embed
+
+        Returns:
+            List of embedding vectors as lists of floats
+
+        Raises:
+            ValueError: If texts list is empty or contains empty strings
+            RuntimeError: If embedding fails
+        """
+        if not texts:
+            raise ValueError("Cannot embed empty texts list")
+
+        if any(not text.strip() for text in texts):
+            raise ValueError("Cannot embed texts with empty strings")
+
+        logger.info(
+            f"Embedding {len(texts)} texts with batch_size={self._batch_size}, device={self._device}"
+        )
+
+        try:
+            # Encode with batch processing
+            embeddings_array: Any = self._model.encode(
+                texts,
+                batch_size=self._batch_size,
+                show_progress_bar=False,
+                convert_to_numpy=True,
+            )
+
+            # Convert numpy array to list of lists
+            if isinstance(embeddings_array, np.ndarray):
+                embeddings_list: list[list[float]] = embeddings_array.tolist()
+            else:
+                raise RuntimeError(
+                    f"Unexpected embedding type: {type(embeddings_array)}"
+                )
+
+            logger.debug(f"Successfully embedded {len(embeddings_list)} texts")
+
+            return embeddings_list
+
+        except Exception as e:
+            logger.error(f"Text embedding failed: {e}")
+            raise RuntimeError(f"Failed to embed texts: {e}") from e
+
     @property
     def model_name(self) -> str:
         """Get model name."""
