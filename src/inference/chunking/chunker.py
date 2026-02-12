@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import cast
 
+from inference.chunking.adaptive_threshold import compute_adaptive_threshold
 from inference.chunking.models import Chunk
 from inference.chunking.sentence_chunker import chunk_by_sentences
 from inference.chunking.silence_chunker import chunk_by_silence
@@ -20,7 +22,7 @@ def chunk_transcript(
     silence_threshold: float | None = None,
     max_tokens: int | None = None,
     overlap_tokens: int | None = None,
-) -> tuple[list[Chunk], dict[str, float | int]]:
+) -> tuple[list[Chunk], dict[str, str | float | int]]:
     """Chunk transcript using two-pass strategy.
 
     Pass 1: Group segments by silence gaps
@@ -28,6 +30,11 @@ def chunk_transcript(
 
     Env vars (all optional; defaults remain unchanged):
         CHUNK_SILENCE_THRESHOLD_SECONDS: float, default 2.0
+        CHUNK_SILENCE_THRESHOLD_MODE: 'fixed' or 'adaptive', default 'fixed'
+        CHUNK_SILENCE_ADAPTIVE_QUANTILE: float, default 0.95
+        CHUNK_SILENCE_ADAPTIVE_MIN_SECONDS: float, default 0.8
+        CHUNK_SILENCE_ADAPTIVE_MAX_SECONDS: float, default 3.0
+        CHUNK_SILENCE_ADAPTIVE_MIN_GAPS: int, default 10
         CHUNK_MAX_TOKENS: int, default 800
         CHUNK_OVERLAP_TOKENS: int, default 160
 
@@ -69,17 +76,37 @@ def chunk_transcript(
         else int(os.getenv("CHUNK_OVERLAP_TOKENS", "160"))
     )
 
+    # Resolve adaptive threshold mode and parameters
+    silence_threshold_mode = os.getenv("CHUNK_SILENCE_THRESHOLD_MODE", "fixed")
+    adaptive_quantile = float(os.getenv("CHUNK_SILENCE_ADAPTIVE_QUANTILE", "0.95"))
+    adaptive_min_seconds = float(os.getenv("CHUNK_SILENCE_ADAPTIVE_MIN_SECONDS", "0.8"))
+    adaptive_max_seconds = float(os.getenv("CHUNK_SILENCE_ADAPTIVE_MAX_SECONDS", "3.0"))
+    adaptive_min_gaps = int(os.getenv("CHUNK_SILENCE_ADAPTIVE_MIN_GAPS", "10"))
+
     logger.info(
         "Starting transcript chunking",
         extra={
             "course_id": course_id,
             "lecture_id": lecture_id,
             "segments": len(transcript.segments),
+            "silence_threshold_mode": silence_threshold_mode,
             "silence_threshold": resolved_silence_threshold,
             "max_tokens": resolved_max_tokens,
             "overlap_tokens": resolved_overlap_tokens,
         },
     )
+
+    # Compute adaptive threshold if mode is 'adaptive'
+    adaptive_stats = None
+    if silence_threshold_mode == "adaptive":
+        resolved_silence_threshold, adaptive_stats = compute_adaptive_threshold(
+            segments=transcript.segments,
+            quantile=adaptive_quantile,
+            clamp_min=adaptive_min_seconds,
+            clamp_max=adaptive_max_seconds,
+            min_gaps=adaptive_min_gaps,
+            fallback_threshold=resolved_silence_threshold,
+        )
 
     # Pass 1: Silence-gap chunking
     intermediate_chunks = chunk_by_silence(
@@ -127,10 +154,17 @@ def chunk_transcript(
         },
     )
 
-    resolved_params = {
+    resolved_params: dict[str, str | float | int] = {
+        "silence_threshold_mode": silence_threshold_mode,
         "silence_threshold": resolved_silence_threshold,
         "max_tokens": resolved_max_tokens,
         "overlap_tokens": resolved_overlap_tokens,
     }
+
+    if adaptive_stats is not None:
+        resolved_params = cast(
+            dict[str, str | float | int],
+            {**resolved_params, **adaptive_stats},
+        )
 
     return final_chunks, resolved_params

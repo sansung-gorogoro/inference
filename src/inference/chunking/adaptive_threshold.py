@@ -26,7 +26,7 @@ from __future__ import annotations
 import math
 from typing import TypedDict
 
-from src.inference.stt.models import Segment
+from inference.stt.models import Segment
 
 
 class AdaptiveThresholdStats(TypedDict):
