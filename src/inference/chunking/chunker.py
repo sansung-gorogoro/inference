@@ -36,7 +36,7 @@ def chunk_transcript(
         CHUNK_SILENCE_ADAPTIVE_MAX_SECONDS: float, default 3.0
         CHUNK_SILENCE_ADAPTIVE_MIN_GAPS: int, default 10
         CHUNK_MAX_TOKENS: int, default 800
-        CHUNK_OVERLAP_TOKENS: int, default 160
+        CHUNK_OVERLAP_TOKENS: int, default 0
         CHUNK_SEMANTIC_MODE: 'none' or 'centroid_v1', default 'none'
         CHUNK_SEMANTIC_ADJ_QUANTILE: float, default 0.2
         CHUNK_SEMANTIC_SIM_CLAMP_MIN: float, default 0.35
@@ -49,7 +49,7 @@ def chunk_transcript(
         lecture_id: Lecture identifier (must be > 0)
         silence_threshold: Maximum gap in seconds to group segments (default: from env or 2.0)
         max_tokens: Maximum tokens per chunk (default: from env or 800)
-        overlap_tokens: Number of overlap tokens between chunks (default: from env or 160)
+        overlap_tokens: Number of overlap tokens between chunks (default: from env or 0)
 
     Returns:
         Tuple of (list of chunks with stable IDs and timestamps, dict of resolved parameters)
@@ -78,7 +78,7 @@ def chunk_transcript(
     resolved_overlap_tokens = (
         overlap_tokens
         if overlap_tokens is not None
-        else int(os.getenv("CHUNK_OVERLAP_TOKENS", "160"))
+        else int(os.getenv("CHUNK_OVERLAP_TOKENS", "0"))
     )
 
     # Resolve adaptive threshold mode and parameters

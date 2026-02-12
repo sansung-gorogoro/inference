@@ -144,14 +144,14 @@ class SentenceSplitter:
 def chunk_by_sentences(
     chunks: list[IntermediateChunk],
     max_tokens: int = 800,
-    overlap_tokens: int = 160,
+    overlap_tokens: int = 0,
 ) -> list[TokenizedChunk]:
     """Split oversized chunks at sentence boundaries with overlap.
 
     Args:
         chunks: List of intermediate chunks from silence-gap chunking
         max_tokens: Maximum tokens per chunk (default: 800)
-        overlap_tokens: Number of overlap tokens between chunks (default: 160)
+        overlap_tokens: Number of overlap tokens between chunks (default: 0)
 
     Returns:
         List of tokenized chunks with sentence-boundary splits and overlap
@@ -232,21 +232,19 @@ def chunk_by_sentences(
 
                 # Start new sub-chunk with overlap
                 # Keep last N tokens from previous chunk
-                if len(current_tokens) > overlap_tokens:
+                if overlap_tokens > 0 and len(current_tokens) > overlap_tokens:
                     overlap_token_ids = current_tokens[-overlap_tokens:]
                     overlap_text = token_counter.decode(overlap_token_ids)
 
                     # Reset with overlap
-                    current_tokens = overlap_token_ids
+                    current_tokens = list(overlap_token_ids) + list(sentence_tokens)
                     current_sentences = [overlap_text, sentence]
                     current_char_offset += len(sub_text) - len(overlap_text)
                 else:
-                    # Not enough tokens for overlap, start fresh
-                    current_tokens = sentence_tokens
+                    # No overlap or not enough tokens for overlap: start fresh
+                    current_tokens = list(sentence_tokens)
                     current_sentences = [sentence]
                     current_char_offset += len(sub_text)
-
-                current_tokens.extend(sentence_tokens)
             else:
                 # Add sentence to current sub-chunk
                 current_sentences.append(sentence)
